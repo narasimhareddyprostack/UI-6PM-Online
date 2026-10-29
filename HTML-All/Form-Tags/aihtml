@@ -1,0 +1,312 @@
+import os, zipfile, textwrap
+
+base = "/mnt/data/jarvis-ai-starter"
+files = {
+    "README.md": r"""
+# JARVIS AI Starter
+
+A small runnable starter with:
+- Next.js + React + TypeScript frontend
+- Python FastAPI backend
+- Dark, cyan-glow chat interface
+- Configurable demo response (no API key required to test)
+
+## Requirements
+- Node.js 20+
+- Python 3.10+
+
+## 1. Run the backend (Windows PowerShell)
+
+```powershell
+cd backend
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8000
+```
+
+If PowerShell blocks activation, run `Set-ExecutionPolicy -Scope Process Bypass` and activate again.
+
+Backend health check: http://127.0.0.1:8000/health
+
+## 2. Run the frontend (new terminal)
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Open http://localhost:3000
+
+## Optional: connect an LLM
+The backend currently returns a local demo response so you can run it without credentials.
+To connect a provider, replace the demo logic in `backend/main.py` and keep API keys in backend environment variables. Never put secret API keys in frontend code.
+""",
+    "backend/requirements.txt": "fastapi\nuvicorn[standard]\npydantic\n",
+    "backend/main.py": r'''
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+
+app = FastAPI(title="JARVIS AI API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+class ChatRequest(BaseModel):
+    message: str
+
+class ChatResponse(BaseModel):
+    reply: str
+
+@app.get("/health")
+def health():
+    return {"status": "ok", "service": "JARVIS AI"}
+
+@app.post("/chat", response_model=ChatResponse)
+def chat(request: ChatRequest):
+    message = request.message.strip()
+    if not message:
+        return {"reply": "Please enter a message."}
+
+    # Demo reply so the starter runs without an API key.
+    # Replace this section with your chosen LLM provider integration.
+    return {
+        "reply": (
+            f"Hello! I'm JARVIS. You said: “{message}”\n\n"
+            "I'm running in demo mode. Connect an LLM provider in backend/main.py "
+            "to enable AI-generated answers."
+        )
+    }
+''',
+    "frontend/package.json": r'''{
+  "name": "jarvis-ai-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "next": "15.3.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "typescript": "^5",
+    "eslint": "^9",
+    "eslint-config-next": "15.3.1"
+  }
+}''',
+    "frontend/tsconfig.json": r'''{
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "incremental": true,
+    "plugins": [{ "name": "next" }]
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
+}''',
+    "frontend/next.config.ts": r'''import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {};
+
+export default nextConfig;
+''',
+    "frontend/next-env.d.ts": r'''/// <reference types="next" />
+/// <reference types="next/image-types/global" />
+
+// NOTE: This file should not be edited
+''',
+    "frontend/app/layout.tsx": r'''import type { Metadata } from "next";
+import "./globals.css";
+
+export const metadata: Metadata = {
+  title: "JARVIS AI",
+  description: "Your personal AI assistant",
+};
+
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  return (
+    <html lang="en">
+      <body>{children}</body>
+    </html>
+  );
+}
+''',
+    "frontend/app/page.tsx": r''' "use client";
+
+import { FormEvent, useState } from "react";
+
+type Message = { role: "assistant" | "user"; content: string };
+
+export default function Home() {
+  const [messages, setMessages] = useState<Message[]>([
+    { role: "assistant", content: "Systems online. I'm JARVIS, your AI assistant. How can I help?" },
+  ]);
+  const [input, setInput] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function sendMessage(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const message = input.trim();
+    if (!message || busy) return;
+    setMessages((current) => [...current, { role: "user", content: message }]);
+    setInput("");
+    setBusy(true);
+    try {
+      const response = await fetch("http://127.0.0.1:8000/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message }),
+      });
+      if (!response.ok) throw new Error("Backend request failed");
+      const data: { reply: string } = await response.json();
+      setMessages((current) => [...current, { role: "assistant", content: data.reply }]);
+    } catch {
+      setMessages((current) => [
+        ...current,
+        { role: "assistant", content: "I can't reach the backend. Start FastAPI on port 8000 and try again." },
+      ]);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function startVoiceInput() {
+    const SpeechRecognition = (window as Window & {
+      SpeechRecognition?: new () => any;
+      webkitSpeechRecognition?: new () => any;
+    }).SpeechRecognition || (window as Window & {
+      webkitSpeechRecognition?: new () => any;
+    }).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      setMessages((current) => [...current, {
+        role: "assistant",
+        content: "Voice input is not supported in this browser. Try a recent version of Chrome."
+      }]);
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = "en-US";
+    recognition.onresult = (event: any) => setInput(event.results[0][0].transcript);
+    recognition.onerror = () => setMessages((current) => [...current, {
+      role: "assistant", content: "I couldn't capture your voice. Check microphone permission and try again."
+    }]);
+    recognition.start();
+  }
+
+  function speakLastReply() {
+    const lastReply = [...messages].reverse().find((message) => message.role === "assistant");
+    if (!lastReply || !("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(new SpeechSynthesisUtterance(lastReply.content));
+  }
+
+  return (
+    <main className="shell">
+      <aside className="sidebar">
+        <div className="brand"><span className="brandIcon">✦</span><span>JARVIS<span className="brandAI"> AI</span></span></div>
+        <button className="newChat" onClick={() => setMessages([{ role: "assistant", content: "New session initialized. What would you like to do?" }])}>＋ New conversation</button>
+        <div className="sideLabel">YOUR ASSISTANT</div>
+        <div className="sideItem active"><span>◈</span> AI Chat</div>
+        <div className="sideItem"><span>◎</span> Voice Assistant <span className="soon">BETA</span></div>
+        <div className="sideItem"><span>⌘</span> Tools</div>
+        <div className="sideBottom"><div className="statusDot" /> All systems ready <span className="version">v0.1</span></div>
+      </aside>
+
+      <section className="mainPanel">
+        <header className="topbar">
+          <div><div className="eyebrow">PERSONAL AI SYSTEM</div><h1>Good afternoon.</h1><p>What can I help you with today?</p></div>
+          <div className="online"><span className="statusDot" /> ONLINE</div>
+        </header>
+
+        <div className="hero">
+          <div className="orbWrap"><div className="orbRing ringOne" /><div className="orbRing ringTwo" /><div className="orbCore"><span>J</span></div><div className="orbDot dotOne" /><div className="orbDot dotTwo" /></div>
+          <div className="heroTitle">At your service.</div>
+          <div className="heroSub">Your intelligent assistant, ready when you are.</div>
+        </div>
+
+        <div className="chat" aria-live="polite">
+          {messages.map((message, index) => (
+            <div className={`message ${message.role}`} key={index}>
+              <div className="avatar">{message.role === "assistant" ? "✦" : "Y"}</div>
+              <div><div className="messageName">{message.role === "assistant" ? "JARVIS" : "YOU"}</div><div className="messageText">{message.content}</div></div>
+            </div>
+          ))}
+          {busy && <div className="typing"><span /> <span /> <span /> JARVIS is thinking…</div>}
+        </div>
+
+        <div className="composerArea">
+          <form className="composer" onSubmit={sendMessage}>
+            <input value={input} onChange={(event) => setInput(event.target.value)} placeholder="Message JARVIS…" aria-label="Message JARVIS" />
+            <button type="button" className="iconButton" title="Voice input" onClick={startVoiceInput}>🎙</button>
+            <button type="submit" className="sendButton" disabled={busy || !input.trim()} aria-label="Send message">↑</button>
+          </form>
+          <div className="composerFoot"><span>✧ JARVIS can make mistakes. Verify important information.</span><button onClick={speakLastReply}>▶ Read last response aloud</button></div>
+        </div>
+      </section>
+    </main>
+  );
+}
+''',
+    "frontend/app/globals.css": r'''@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap');
+
+:root{--bg:#070b12;--panel:#0b111b;--line:rgba(117,163,197,.15);--cyan:#51e6ff;--muted:#8393a8;--text:#edf6ff}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:Inter,Arial,sans-serif}
+button,input{font:inherit}button{cursor:pointer}
+.shell{min-height:100vh;display:grid;grid-template-columns:250px 1fr;background:radial-gradient(ellipse at 66% 8%,rgba(12,83,113,.14),transparent 36%),var(--bg)}
+.sidebar{border-right:1px solid var(--line);background:rgba(8,14,23,.88);padding:27px 17px;display:flex;flex-direction:column;min-height:100vh}
+.brand{display:flex;align-items:center;gap:11px;font-size:19px;font-weight:700;letter-spacing:2px;padding:0 8px 31px}.brandIcon{width:31px;height:31px;display:grid;place-items:center;color:var(--cyan);border:1px solid rgba(81,230,255,.5);border-radius:10px;box-shadow:0 0 20px rgba(81,230,255,.13)}.brandAI{color:var(--cyan);font-weight:500}
+.newChat{border:1px solid rgba(81,230,255,.32);background:rgba(81,230,255,.07);color:#dffaff;border-radius:9px;padding:12px;text-align:left;margin-bottom:33px}.newChat:hover{background:rgba(81,230,255,.13)}
+.sideLabel,.eyebrow{font:10px 'DM Mono',monospace;letter-spacing:1.8px;color:#6e8298}.sideLabel{padding:0 9px 13px}.sideItem{display:flex;align-items:center;gap:12px;padding:12px 10px;color:#95a5b8;font-size:13px;border-radius:7px;margin-bottom:4px}.sideItem span:first-child{font-size:17px}.sideItem.active{background:rgba(81,230,255,.08);color:var(--cyan);border:1px solid rgba(81,230,255,.12)}.soon{font:9px 'DM Mono',monospace;color:#7d90a5;margin-left:auto}.sideBottom{margin-top:auto;border-top:1px solid var(--line);padding:18px 3px 0;display:flex;align-items:center;gap:8px;font-size:11px;color:#91a2b6}.statusDot{width:7px;height:7px;border-radius:50%;background:#55f2b0;box-shadow:0 0 9px rgba(85,242,176,.7);display:inline-block}.version{margin-left:auto;color:#52677d;font-family:'DM Mono',monospace}
+.mainPanel{min-width:0;display:flex;flex-direction:column;min-height:100vh;padding:31px clamp(20px,5vw,76px) 24px}.topbar{display:flex;justify-content:space-between;align-items:flex-start}.topbar h1{font-size:25px;font-weight:600;letter-spacing:-.8px;margin:12px 0 6px}.topbar p{margin:0;color:var(--muted);font-size:13px}.online{display:flex;align-items:center;gap:8px;font:10px 'DM Mono',monospace;color:#8fa5b7;border:1px solid var(--line);padding:9px 11px;border-radius:20px}
+.hero{display:flex;align-items:center;flex-direction:column;padding:13px 0 14px}.orbWrap{width:170px;height:170px;position:relative;display:grid;place-items:center;margin:0 0 8px}.orbRing{position:absolute;border:1px solid rgba(81,230,255,.18);border-radius:50%;inset:7px;box-shadow:0 0 32px rgba(36,176,223,.04)}.ringOne{transform:rotateX(62deg) rotate(28deg);border-color:rgba(81,230,255,.4)}.ringTwo{inset:18px;transform:rotateX(68deg) rotate(-34deg);border-color:rgba(95,135,255,.38)}.orbCore{width:86px;height:86px;border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle at 35% 30%,#244d6b,#0a192b 58%,#060d16);border:1px solid rgba(81,230,255,.75);box-shadow:0 0 22px rgba(81,230,255,.26),inset 0 0 23px rgba(81,230,255,.16);color:#a9f6ff;font-size:34px;font-weight:500;text-shadow:0 0 18px var(--cyan)}.orbDot{position:absolute;width:5px;height:5px;background:var(--cyan);border-radius:50%;box-shadow:0 0 10px var(--cyan)}.dotOne{top:28px;right:32px}.dotTwo{bottom:29px;left:27px}.heroTitle{font-size:18px;font-weight:600;letter-spacing:-.3px}.heroSub{font-size:12px;color:#8295a9;margin-top:7px}
+.chat{width:100%;max-width:850px;margin:0 auto;flex:1;min-height:110px;max-height:calc(100vh - 490px);overflow:auto;padding:5px 5px 20px}.message{display:flex;gap:13px;padding:14px 0;border-bottom:1px solid rgba(117,163,197,.08)}.avatar{width:29px;height:29px;flex:0 0 29px;border-radius:9px;display:grid;place-items:center;font-size:13px;background:rgba(81,230,255,.1);color:var(--cyan);border:1px solid rgba(81,230,255,.2)}.user .avatar{background:#182333;border-color:#2a3d53;color:#d4e0ef}.messageName{font:10px 'DM Mono',monospace;letter-spacing:1px;color:#78a3b9;margin:1px 0 7px}.user .messageName{color:#9baabd}.messageText{font-size:13px;line-height:1.7;color:#d2deeb;white-space:pre-wrap}.typing{display:flex;align-items:center;gap:5px;color:var(--muted);font-size:12px;padding:15px 0}.typing span{width:5px;height:5px;border-radius:50%;background:var(--cyan);animation:pulse 1s infinite alternate}.typing span:nth-child(2){animation-delay:.2s}.typing span:nth-child(3){animation-delay:.4s}@keyframes pulse{to{opacity:.25;transform:translateY(-3px)}}
+.composerArea{max-width:850px;width:100%;margin:0 auto}.composer{display:flex;align-items:center;gap:10px;padding:9px 10px 9px 17px;background:#0c1420;border:1px solid rgba(105,167,199,.25);border-radius:13px;box-shadow:0 0 25px rgba(0,0,0,.16)}.composer:focus-within{border-color:rgba(81,230,255,.5);box-shadow:0 0 25px rgba(81,230,255,.06)}.composer input{flex:1;min-width:0;background:transparent;border:0;outline:0;color:var(--text);font-size:13px;padding:7px 0}.composer input::placeholder{color:#61758b}.iconButton,.sendButton{border:0;border-radius:8px;width:34px;height:34px}.iconButton{background:#152231;color:#8da6bb}.iconButton:hover{color:var(--cyan)}.sendButton{background:var(--cyan);color:#06111a;font-size:22px;font-weight:600}.sendButton:disabled{opacity:.35;cursor:default}.composerFoot{display:flex;justify-content:space-between;gap:10px;color:#61768a;font-size:10px;padding:12px 3px}.composerFoot button{background:transparent;border:0;color:#7f9cb1;font-size:10px}.composerFoot button:hover{color:var(--cyan)}
+@media(max-width:720px){.shell{grid-template-columns:1fr}.sidebar{min-height:0;padding:15px;flex-direction:row;align-items:center;gap:10px;border-right:0;border-bottom:1px solid var(--line)}.brand{padding:0;font-size:16px}.newChat{margin:0 0 0 auto;padding:9px;font-size:11px}.sideLabel,.sideItem,.sideBottom{display:none}.mainPanel{padding:24px 16px}.topbar h1{font-size:22px}.online{font-size:9px}.hero{padding-top:16px}.orbWrap{width:145px;height:145px}.chat{max-height:none;min-height:130px}.composerFoot{font-size:9px}.composerFoot button{font-size:9px}}
+'''
+}
+
+os.makedirs(base, exist_ok=True)
+for rel, content in files.items():
+    path = os.path.join(base, rel)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        f.write(textwrap.dedent(content).lstrip())
+
+zip_path = "/mnt/data/jarvis-ai-starter.zip"
+with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+    for root, _, names in os.walk(base):
+        for name in names:
+            path = os.path.join(root, name)
+            zf.write(path, os.path.relpath(path, base))
+
+print("Created runnable JARVIS AI starter ZIP:", zip_path)
+print("Files included:", len(files))
+
+
+

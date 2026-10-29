@@ -1,0 +1,50 @@
+What is CSS?
+
+How many ways - can we apply CSS?
+
+1. inline CSS     - style Attribute
+2. Internal CSS   - <style> Tag 
+3. Exteranl CSS   - <link> Tag
+
+What is CSS Selector?
+----------------
+group of styles for Reusability.
+
+Type of selector's
+-----------------------
+1. Tag/Element Selector
+2. Group of Tag/Element Selector
+3. Class Selector   .
+4. Id Selector      #
+
+5. Group of Tag/Element, Class and Id Selector
+
+6. Attribute Selector    []
+7. Universal Selector    *
+
+
+class Selector?
+--------------------
+
+
+CSS Selector Specificity Order
+----------------------------------
+inline css >  id selector > class selector>Tag Selector
+1000             100          10            1
+
+
+
+CSS Rules:
+---------------
+1. styles are apply - top to buttom
+   (Nearest style has highest priority)
+2. CSS Selector Specificity Order
+CSS Selector Specificity Order
+----------------------------------
+inline css >  id selector > class selector>Tag Selector
+1000             100          10            1
+
+
+Flex vs Grid Model
+----------------------------------------------------
+Bootstrap?

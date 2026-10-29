@@ -1,0 +1,18 @@
+a{
+    background-color: red;
+}
+
+a[target]{
+    background-color: yellow;
+}
+
+
+/* .abc{}
+
+#xyz{} */
+
+
+
+*{
+    font-family: Verdana, Geneva, Tahoma, sans-serif;
+}

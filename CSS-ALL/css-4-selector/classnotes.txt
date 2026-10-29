@@ -1,0 +1,19 @@
+CSS Selector?
+----------------
+group of styles for Reusability.
+
+Type of selector's
+-----------------------
+1. Tag/Element Selector
+2. Group of Tag/Element Selector
+3. Class Selector
+4. Id Selector
+
+5. Group of Tag/Element, Class and Id Selector
+
+6. Attribute Selector
+7. Universal Selector
+
+
+class Selector?
+--------------------

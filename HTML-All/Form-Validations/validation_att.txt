@@ -1,0 +1,17 @@
+input tag validation attributes
+
+<input type="text"    />
+
+required            
+readonly           
+disable
+min                  - number data          
+max
+minlength           
+maxlength
+name           
+id
+value                  
+placeholder
+tabindex
+pattern           
